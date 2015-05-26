@@ -9,8 +9,6 @@ import org.junit.Test;
 
 public class FirstTest
 {
-
-	
   @Before
   public void setUp(){
     System.out.println("This is test initial");
