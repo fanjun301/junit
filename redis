@@ -1,0 +1,41 @@
+1 快速部署
+1. wget http://download.redis.io/releases/redis-2.8.8.tar.gz
+2. tar xzf redis-2.8.8.tar.gz
+3. cd redis-2.8.8
+4. make
+5. src/redis-server &       <--以默认配置启动redis
+6. src/redis-cli -p 6379    <--通过终端访问redis，默认端口6379
+
+2 redis.conf
+pidfile "/var/run/redis6381.pid"      <--进程文件，部署单机多实例需要修改（建议以端口号区分）
+port 6381                             <--端口号，部署单机多实例需要修改
+loglevel notice                       <--日志级别，建议默认即可，打印明细会损耗一定性能
+logfile "/var/log/redis/6381.log"     <--日志文件，部署单机多实例需要修改（建议以端口号区分），另外需要给日志所在目录增加写权限
+save 900 1                            <--rdb持久化策略，默认即可
+save 300 10
+save 60  10000
+dbfilename "dump6381.rdb"             <--rdb持久化文件，部署单机多实例需要修改（建议以端口号区分）
+masterauth <master-password>          <--访问密码，如果是主从结构，注意slave的密码要和master一致
+slaveof <masterip> <masterport>       <--主从复制，指定master地址（master不用配置）
+maxclients 1000                       <--最大客户端连接数
+maxmemory 1gb                         <--最大占用内存  
+maxmemory-policy allkeys-lru          <--内存达到上限后的清理策略
+appendonly no                         <--关闭aof持久化
+appendfilename "appendonly6381.aof"   <--虽然没有使用aof，但如果部署单机多实例最好也修改（建议以端口号区分）
+
+部署Sentinel
+sentinel monitor session-master 172.17.20.50 6381 1         <--指定master节点地址，最后一个数字表示需要多少sentinel同意才能执行failover
+sentinel auth-pass session-master <password>                <--选填，如果redis设置了密码，这里也需要设置，不然sentinel无法连接redis
+sentinel known-slave session-master 172.17.20.1 6381        <--选填，指定已知的slave，如果不填Sentinel可以自动识别
+sentinel down-after-milliseconds session-master 5000        <--第一次心跳检测识别到故障之后重试多少时间（单位毫秒，每秒重试一次）
+sentinel failover-timeout session-master 180000             <--选填，用于协调多台sentinel，如果已经有sentinel去做failover了，则等待这个时间后再试，保持默认3分钟即可
+sentinel config-epoch session-master 1                      <--用于协调多台sentinel，sentinel每做一次failover数字递增，默认从1开始计数即可
+sentinel known-sentinel session-master 172.17.40.51 26379 640da4cbb6f72f26e7ae222d283fb9c15665e972       <--选填，已知的其他Sentinel，如果不填Sentinel可以自动识别
+
+启动
+redis-2.8.8/src/redis-server ./../sentinel.conf --sentinel &     <--指定以sentinel模式启动，并读取sentinel.conf
+
+确认生效
+redis-2.8.8/src/redis-cli -p <sentinel-port> info     <--查看监控的主从关系是否正确，状态是否ok（status=ok）
+redis-2.8.8/src/redis-cli -p <redis-port> monitor     <--查看redis的master/slave是否每秒都收到一次心跳请求（PING）
+
